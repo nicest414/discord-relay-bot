@@ -2,6 +2,7 @@ import {
   ChannelType,
   Client,
   GatewayIntentBits,
+  Options,
   PermissionFlagsBits,
   type Channel,
   type Message,
@@ -17,9 +18,39 @@ import type {
   ThreadSummary,
 } from "./types.js";
 
+// Messages are always fetched from the API, so only guild/channel/role data is kept in memory.
+// Members are capped instead of disabled because Message#member resolves from the member cache.
 export function createDiscordClient(): Client {
   return new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
+    makeCache: Options.cacheWithLimits({
+      MessageManager: 0,
+      ReactionManager: 0,
+      ReactionUserManager: 0,
+      PresenceManager: 0,
+      UserManager: 0,
+      VoiceStateManager: 0,
+      ThreadMemberManager: 0,
+      GuildEmojiManager: 0,
+      GuildStickerManager: 0,
+      GuildInviteManager: 0,
+      GuildScheduledEventManager: 0,
+      GuildBanManager: 0,
+      StageInstanceManager: 0,
+      AutoModerationRuleManager: 0,
+      ApplicationCommandManager: 0,
+      GuildMemberManager: {
+        maxSize: 100,
+        keepOverLimit: (member) => member.id === member.client.user.id,
+      },
+    }),
+    sweepers: {
+      ...Options.DefaultSweeperSettings,
+      guildMembers: {
+        interval: 3600,
+        filter: () => (member) => member.id !== member.client.user.id,
+      },
+    },
   });
 }
 
@@ -97,6 +128,7 @@ export class DiscordJsGateway implements DiscordGateway {
     if (!channel || !channel.isTextBased()) return null;
     const messages = await channel.messages.fetch({
       limit: options.limit,
+      cache: false,
       ...(options.before ? { before: options.before } : {}),
       ...(options.after ? { after: options.after } : {}),
     });
