@@ -3,7 +3,9 @@
 Discordサーバーに常駐し、外部クライアント（AIエージェントや自作ツール）が **HTTP API** でサーバーの会話履歴を取れるようにするBotです。GitHubのWebhookを受け取って、Issue・PR・レビューの通知をDiscordに流すこともできます。
 
 - 読み取り専用がデフォルト（書き込みは `ENABLE_WRITE=true` のときだけ）
-- APIはBearerキーで認証。`ALLOWED_GUILD_IDS` で公開するサーバーを限定できる
+- APIはBearerキーで認証。`API_KEYS` で名前付きキーを発行でき、人ごとに無効化できる
+- `RATE_LIMIT_MAX` でキーごとのレート制限。誰が何を取ったかログに残る
+- `ALLOWED_GUILD_IDS` で公開するサーバーを限定できる
 - Botが見られるのは、Botに付けたロールやチャンネル権限の範囲だけ（DMは読めません）
 - 外部からの投稿でメンション（@everyone など）が飛ばないようにしています
 - 自宅サーバーで常駐させやすいよう、discord.jsのキャッシュを絞っています（メッセージは毎回APIから取得し、キャッシュしません）
@@ -25,7 +27,7 @@ Discordサーバーに常駐し、外部クライアント（AIエージェン�
 Node.js 20以上が必要です。
 
 ```bash
-cp .env.example .env   # 値を埋める（API_KEY は `openssl rand -hex 32` などで生成）
+cp .env.example .env   # API_KEYS は `openssl rand -hex 32` などで人ごとに発行
 npm install
 npm run dev            # 開発用（ファイル変更で自動再起動）
 # 本番用
@@ -65,8 +67,8 @@ cloudflared tunnel --url http://localhost:3000
 `messages` と `transcript` のクエリパラメータ：`limit`（1〜100、デフォルト50）、`before` または `after`（メッセージID）。スレッドもチャンネルIDとして指定できます。
 
 ```bash
-curl -H "Authorization: Bearer $API_KEY" "http://localhost:3000/api/guilds"
-curl -H "Authorization: Bearer $API_KEY" "http://localhost:3000/api/channels/123456789012345678/transcript?limit=100"
+curl -H "Authorization: Bearer $KEY" "http://localhost:3000/api/guilds"
+curl -H "Authorization: Bearer $KEY" "http://localhost:3000/api/channels/123456789012345678/transcript?limit=100"
 ```
 
 ## 4. GitHub通知

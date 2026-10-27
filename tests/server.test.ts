@@ -46,6 +46,8 @@ function makeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     apiKey: API_KEY,
     host: "127.0.0.1",
     port: 0,
+    rateLimitMax: 60,
+    rateLimitWindowMs: 60000,
     allowedGuildIds: [GUILD],
     enableWrite: false,
     githubWebhookSecret: WEBHOOK_SECRET,

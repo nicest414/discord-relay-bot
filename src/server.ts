@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "./config.js";
@@ -9,6 +10,7 @@ import type { DiscordGateway } from "./types.js";
 declare module "fastify" {
   interface FastifyRequest {
     rawBody?: Buffer;
+    clientLabel?: string;
   }
 }
 
@@ -24,6 +26,10 @@ const messagesQuery = z
   })
   .refine((q) => !(q.before && q.after), { message: "use either before or after, not both" });
 const sendBody = z.object({ content: z.string().min(1).max(2000) });
+
+// Tests may build a config with only `apiKey`.
+const authKeysOf = (config: AppConfig) =>
+  config.apiKeys ?? [{ label: "default", key: config.apiKey }];
 
 export type ServerDeps = {
   config: AppConfig;
@@ -46,6 +52,15 @@ function parseOr400<T>(schema: z.ZodType<T>, value: unknown, reply: FastifyReply
 
 export function buildServer({ config, gateway, logger = false }: ServerDeps): FastifyInstance {
   const app = Fastify({ logger });
+
+  // Requests that do not authenticate are still limited per source IP.
+  const rateLimitKey = (request: FastifyRequest) => request.clientLabel ?? request.ip;
+  app.register(rateLimit, {
+    max: config.rateLimitMax,
+    timeWindow: config.rateLimitWindowMs,
+    keyGenerator: rateLimitKey,
+    errorResponseBuilder: () => ({ error: "rate_limited" }),
+  });
 
   app.addContentTypeParser("application/json", { parseAs: "buffer" }, (request, body, done) => {
     const buffer = body as Buffer;
@@ -78,9 +93,11 @@ export function buildServer({ config, gateway, logger = false }: ServerDeps): Fa
       api.addHook("onRequest", async (request: FastifyRequest, reply: FastifyReply) => {
         const header = request.headers.authorization ?? "";
         const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
-        if (!token || !safeEqual(token, config.apiKey)) {
+        const key = authKeysOf(config).find((entry) => token && safeEqual(token, entry.key));
+        if (!key) {
           return reply.code(401).send({ error: "unauthorized" });
         }
+        request.clientLabel = key.label;
       });
 
       api.get("/guilds", async () => {
